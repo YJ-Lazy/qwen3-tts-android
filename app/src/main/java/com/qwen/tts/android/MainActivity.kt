@@ -459,7 +459,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(
                             busy = false,
                             loaded = true,
-                            status = "Speech ready",
+                            status = "语音已生成",
                             sampleRate = sampleRate,
                             sampleCount = nativeResult.audio.size,
                             synthesisMillis = nativeResult.timeMs,
@@ -500,7 +500,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopVoiceRecordingAndCreate(name: String) {
-        val trimmedName = name.trim().ifBlank { "Voice ${voices.value.size + 1}" }
+        val trimmedName = name.trim().ifBlank { "音色 ${voices.value.size + 1}" }
         val result = recorder.stop() ?: return
         viewModelScope.launch {
             startBusy(status = "正在创建音色特征")
@@ -589,7 +589,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     it.copy(
                         sampleRate = wav.sampleRate,
                         sampleCount = wav.samples.size,
-                        status = "Speech ready",
+                        status = "语音已生成",
                         error = null,
                     )
                 }
@@ -1684,7 +1684,7 @@ private fun formatDuration(milliseconds: Long): String {
 }
 
 private fun formatSeconds(seconds: Double): String =
-    "%.1fs".format(Locale.US, seconds.coerceAtLeast(0.0))
+    "%.1f秒".format(Locale.US, seconds.coerceAtLeast(0.0))
 
 private fun formatDate(epochMillis: Long): String {
     val date = java.text.SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.getDefault())
