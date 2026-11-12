@@ -132,20 +132,8 @@ private data class ModelVariant(
     val totalBytes: Long = files.sumOf { it.sizeBytes }
 }
 
-private data class LanguageOption(val label: String, val id: Int)
 private data class BackendOption(val id: String, val label: String, val preference: Int)
 private data class GenerationTimeEstimate(val totalMillis: Long, val sampleSize: Int)
-
-private val languageOptions = listOf(
-    LanguageOption("English", 2050),
-    LanguageOption("German", 2053),
-    LanguageOption("Spanish", 2054),
-    LanguageOption("French", 2061),
-    LanguageOption("Chinese", 2055),
-    LanguageOption("Japanese", 2058),
-    LanguageOption("Korean", 2064),
-    LanguageOption("Russian", 2069),
-)
 
 private val backendOptions = listOf(
     BackendOption("cpu", "CPU", QwenEngine.BACKEND_CPU),
@@ -160,7 +148,7 @@ private object QwenModel {
     val defaultVariant: ModelVariant = variant(
         id = "q4_k_m",
         label = "Q4_K_M",
-        displayName = "Qwen3-TTS 0.6B Q4_K_M",
+        displayName = "Qwen3-TTS 0.6B（Q4_K_M）",
         talkerName = "qwen-talker-0.6b-base-Q4_K_M.gguf",
         tokenizerName = "qwen-tokenizer-12hz-Q4_K_M.gguf",
         talkerSizeBytes = 628_905_056L,
@@ -205,7 +193,7 @@ private object QwenModel {
 }
 
 data class QwenTtsUiState(
-    val text: String = "Hello World from Qwen3 TTS running on Android on-device!",
+    val text: String = "你好！欢迎使用本地 Qwen3 语音合成。",
     val selectedModelId: String = QwenModel.defaultVariant.id,
     val selectedBackendId: String = defaultBackendOption.id,
     val selectedVoiceId: String? = null,
@@ -217,7 +205,7 @@ data class QwenTtsUiState(
     val downloadProgress: Float = 0f,
     val downloadBytes: Long = 0L,
     val downloadTotalBytes: Long = QwenModel.defaultVariant.totalBytes,
-    val status: String = "Model not downloaded",
+    val status: String = "模型尚未下载",
     val error: String? = null,
     val sampleRate: Int = 0,
     val sampleCount: Int = 0,
@@ -229,7 +217,7 @@ data class QwenTtsUiState(
     val maxAudioTokens: Int = 512,
     val cpuThreads: Int = 0,
     val selectedCpuThreads: Int = 0,
-    val selectedLanguageId: Int = 2050,
+    val selectedLanguageId: Int = 2055,
     val tokenizeMillis: Long = 0,
     val encodeMillis: Long = 0,
     val generateMillis: Long = 0,
@@ -286,11 +274,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         engine?.setCpuThreads(value)
     }
 
-    fun updateLanguage(languageId: Int) {
-        if (_uiState.value.busy) return
-        _uiState.update { it.copy(selectedLanguageId = languageId) }
-    }
-
     fun selectVoice(voiceId: String?) {
         _uiState.update { it.copy(selectedVoiceId = voiceId) }
     }
@@ -313,7 +296,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 activeBackendName = null,
                 modelReady = ready,
                 loaded = false,
-                status = if (ready) "Model ready" else "Model not downloaded",
+                status = if (ready) "模型已就绪" else "模型尚未下载",
                 error = null,
                 downloadProgress = 0f,
                 downloadBytes = 0L,
@@ -342,7 +325,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.downloading) return
         viewModelScope.launch {
             val variant = selectedVariant()
-            startBusy(status = "Preparing model download", downloading = true)
+            startBusy(status = "正在准备下载模型", downloading = true)
             _uiState.update {
                 it.copy(downloadProgress = 0f, downloadBytes = 0L, downloadTotalBytes = variant.totalBytes)
             }
@@ -357,7 +340,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             result.fold(
                 onSuccess = {
                     stopBusyTicker()
-                    refreshModelState("Model ready")
+                    refreshModelState("模型已就绪")
                 },
                 onFailure = { throwable ->
                     stopBusyTicker()
@@ -365,8 +348,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(
                             busy = false,
                             downloading = false,
-                            status = "Download failed",
-                            error = throwable.message ?: "Download failed",
+                            status = "模型下载失败",
+                            error = throwable.message ?: "模型下载失败",
                         )
                     }
                 },
@@ -377,7 +360,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun loadModel() {
         if (!_uiState.value.modelReady || _uiState.value.loaded || _uiState.value.busy) return
         viewModelScope.launch {
-            startBusy(status = "Loading native model")
+            startBusy(status = "正在加载本地模型")
             val result = runCatching {
                 withContext(Dispatchers.IO) {
                     val native = ensureEngineLoaded(selectedVariant())
@@ -393,7 +376,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(
                             busy = false,
                             loaded = true,
-                            status = if (backend.isBlank()) "Model loaded" else "Model loaded on $backend",
+                            status = if (backend.isBlank()) "模型已加载" else "模型已加载（$backend）",
                             activeBackendName = backend.ifBlank { null },
                             cpuThreads = threads,
                             supportsCloning = caps?.supportsCloning,
@@ -407,8 +390,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(
                             busy = false,
                             loaded = false,
-                            status = "Load failed",
-                            error = throwable.message ?: "Load failed",
+                            status = "模型加载失败",
+                            error = throwable.message ?: "模型加载失败",
                         )
                     }
                 },
@@ -423,7 +406,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val variant = selectedVariant()
             val selectedVoice = _uiState.value.selectedVoiceId?.let { id -> voices.value.firstOrNull { it.voiceId == id } }
             val estimate = estimateSynthesisMillis(text)
-            startBusy(status = "Synthesizing speech", resetSynthesis = true, synthesisEstimate = estimate)
+            startBusy(status = "正在合成语音", resetSynthesis = true, synthesisEstimate = estimate)
 
             val result = runCatching {
                 withContext(Dispatchers.IO) {
@@ -432,7 +415,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         _uiState.update {
                             it.copy(
                                 loaded = true,
-                                status = "Generating speech codes",
+                                status = "正在生成语音编码",
                                 synthesisFrames = frames,
                                 maxAudioTokens = maxTokens,
                             )
@@ -461,8 +444,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             it.copy(
                                 busy = false,
                                 loaded = true,
-                                status = "Synthesis failed",
-                                error = nativeResult.errorMsg ?: "Native synthesis failed",
+                                status = "语音合成失败",
+                                error = nativeResult.errorMsg ?: "本地语音合成失败",
                             )
                         }
                         return@fold
@@ -470,7 +453,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                     generatedAudio = nativeResult.audio
                     val sampleRate = nativeResult.sampleRate.takeIf { it > 0 } ?: 24_000
-                    val voiceName = selectedVoice?.name ?: "Default Voice"
+                    val voiceName = selectedVoice?.name ?: "默认音色"
                     persistGeneratedAudio(text, nativeResult.audio, sampleRate, voiceName, selectedVoice?.voiceId, nativeResult.timeMs)
                     _uiState.update {
                         it.copy(
@@ -499,8 +482,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.update {
                         it.copy(
                             busy = false,
-                            status = "Synthesis failed",
-                            error = throwable.message ?: "Synthesis failed",
+                            status = "语音合成失败",
+                            error = throwable.message ?: "语音合成失败",
                         )
                     }
                 },
@@ -512,7 +495,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.busy || recorderState.value.isRecording) return
         val file = File(voiceDir, "pending-${System.currentTimeMillis()}.wav")
         if (!recorder.start(file)) {
-            _uiState.update { it.copy(error = "Could not start microphone recording") }
+            _uiState.update { it.copy(error = "无法启动麦克风录音") }
         }
     }
 
@@ -520,13 +503,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val trimmedName = name.trim().ifBlank { "Voice ${voices.value.size + 1}" }
         val result = recorder.stop() ?: return
         viewModelScope.launch {
-            startBusy(status = "Creating voice embedding")
+            startBusy(status = "正在创建音色特征")
             val created = runCatching {
                 withContext(Dispatchers.IO) {
                     val native = ensureEngineLoaded(selectedVariant())
                     val caps = native.getModelCapabilities()
                     if (caps?.supportsCloning == false) {
-                        error("The loaded model does not expose a speaker encoder.")
+                        error("当前模型未提供说话人编码器。")
                     }
 
                     val voiceId = "voice-${System.currentTimeMillis()}"
@@ -537,7 +520,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                     val embedding = File(targetDir, "speaker.json")
                     if (!native.extractSpeakerEmbedding(reference.absolutePath, embedding.absolutePath)) {
-                        error(native.getLastError() ?: "Speaker embedding extraction failed")
+                        error(native.getLastError() ?: "提取音色特征失败")
                     }
 
                     VoiceProfileEntity(
@@ -558,7 +541,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(
                             busy = false,
                             selectedVoiceId = voice.voiceId,
-                            status = "Voice created",
+                            status = "音色创建成功",
                             error = null,
                         )
                     }
@@ -568,8 +551,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.update {
                         it.copy(
                             busy = false,
-                            status = "Voice creation failed",
-                            error = throwable.message ?: "Voice creation failed",
+                            status = "音色创建失败",
+                            error = throwable.message ?: "音色创建失败",
                         )
                     }
                 },
@@ -612,7 +595,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 playAudio(generationId)
             }.onFailure { throwable ->
-                _uiState.update { it.copy(error = throwable.message ?: "Could not play history item") }
+                _uiState.update { it.copy(error = throwable.message ?: "无法播放这条历史音频") }
             }
         }
     }
@@ -684,7 +667,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         File(generation.wavPath).inputStream().use { input ->
                             input.copyTo(output)
                         }
-                    } ?: error("Could not open media output")
+                    } ?: error("无法打开导出目标")
                 }
             }
             result.fold(
@@ -692,8 +675,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.update {
                         it.copy(
                             savedFileName = null,
-                            snackbarMessage = "Export complete",
-                            status = "Exported WAV",
+                            snackbarMessage = "导出完成",
+                            status = "WAV 音频已导出",
                             error = null,
                         )
                     }
@@ -701,7 +684,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onFailure = { throwable ->
                     _uiState.update {
                         it.copy(
-                            snackbarMessage = throwable.message ?: "Could not export WAV",
+                            snackbarMessage = throwable.message ?: "无法导出 WAV 音频",
                             error = null,
                         )
                     }
@@ -714,13 +697,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val native = engine ?: QwenEngine().also { engine = it }
         val backend = selectedBackendOption()
         if (!native.setBackendPreference(backend.preference)) {
-            error("Could not switch backend to ${backend.label}")
+            error("无法切换到 ${backend.label} 后端")
         }
         val threads = selectedCpuThreadCount()
         native.setCpuThreads(threads)
         if (!_uiState.value.loaded) {
             if (!native.loadModels(modelDir.absolutePath, variant.talkerName)) {
-                error(native.getLastError() ?: "Native model load failed")
+                error(native.getLastError() ?: "本地模型加载失败")
             }
             val caps = native.getModelCapabilities()
             _uiState.update {
@@ -832,7 +815,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 busy = false,
                 downloading = false,
                 downloadTotalBytes = variant.totalBytes,
-                status = status ?: if (ready) "Model ready" else "Model not downloaded",
+                status = status ?: if (ready) "模型已就绪" else "模型尚未下载",
             )
         }
     }
@@ -854,7 +837,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 completedBytes += file.sizeBytes
                 return@forEachIndexed
             }
-            val url = file.url ?: error("${file.name} is a local experiment file. Use scripts/install_nvfp4_android.ps1 to sideload it.")
+            val url = file.url ?: error("${file.name} 是实验性本地模型文件，请使用对应安装脚本导入。")
             val temp = File(modelDir, "${file.name}.download")
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 instanceFollowRedirects = true
@@ -880,7 +863,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 it.copy(
                                     downloadBytes = total,
                                     downloadProgress = total.toFloat() / variant.totalBytes.toFloat(),
-                                    status = "Downloading ${index + 1}/${variant.files.size}: ${file.name}",
+                                    status = "正在下载 ${index + 1}/${variant.files.size}：${file.name}",
                                 )
                             }
                         }
@@ -891,15 +874,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             if (temp.length() < file.sizeBytes) {
                 temp.delete()
-                error("Downloaded ${file.name} is incomplete")
+                error("${file.name} 下载不完整")
             }
             if (target.exists() && !target.delete()) {
                 temp.delete()
-                error("Could not replace ${file.name}")
+                error("无法替换 ${file.name}")
             }
             if (!temp.renameTo(target)) {
                 temp.delete()
-                error("Could not save ${file.name}")
+                error("无法保存 ${file.name}")
             }
             completedBytes += file.sizeBytes
         }
@@ -990,10 +973,10 @@ private sealed class AppDestination(
     val label: String,
     val icon: @Composable () -> Unit,
 ) {
-    object Studio : AppDestination("studio", "Studio", { Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null) })
-    object Voices : AppDestination("voices", "Voices", { Icon(Icons.Default.RecordVoiceOver, contentDescription = null) })
-    object History : AppDestination("history", "History", { Icon(Icons.Default.History, contentDescription = null) })
-    object Settings : AppDestination("settings", "Settings", { Icon(Icons.Default.Settings, contentDescription = null) })
+    object Studio : AppDestination("studio", "工作台", { Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null) })
+    object Voices : AppDestination("voices", "音色管理", { Icon(Icons.Default.RecordVoiceOver, contentDescription = null) })
+    object History : AppDestination("history", "历史", { Icon(Icons.Default.History, contentDescription = null) })
+    object Settings : AppDestination("settings", "设置", { Icon(Icons.Default.Settings, contentDescription = null) })
 }
 
 private val appDestinations = listOf(
@@ -1091,7 +1074,7 @@ private fun StudioScreen(viewModel: MainViewModel) {
     val state by viewModel.uiState.collectAsState()
     val voices by viewModel.voices.collectAsState()
     var showVoicePicker by remember { mutableStateOf(false) }
-    val selectedVoiceName = voices.firstOrNull { it.voiceId == state.selectedVoiceId }?.name ?: "Default Voice"
+    val selectedVoiceName = voices.firstOrNull { it.voiceId == state.selectedVoiceId }?.name ?: "默认音色"
 
     if (showVoicePicker) {
         VoicePickerSheet(
@@ -1114,7 +1097,7 @@ private fun StudioScreen(viewModel: MainViewModel) {
                 .padding(bottom = 88.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Text to speech", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+            Text("文字转语音", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
             state.error?.let { error ->
                 Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
@@ -1123,7 +1106,6 @@ private fun StudioScreen(viewModel: MainViewModel) {
                 selectedVoiceName = selectedVoiceName,
                 onTextChange = viewModel::updateText,
                 onVoicePickerClick = { if (!state.busy) showVoicePicker = true },
-                onLanguageChange = viewModel::updateLanguage,
             )
             if ((state.busy && !state.downloading) || state.sampleCount > 0) {
                 ResultPanel(
@@ -1150,7 +1132,7 @@ private fun StudioScreen(viewModel: MainViewModel) {
             ) {
                 Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(if (state.busy && !state.downloading) "Generating..." else "Generate")
+                Text(if (state.busy && !state.downloading) "正在生成……" else "开始合成")
             }
         }
     }
@@ -1184,21 +1166,21 @@ private fun VoicesScreen(viewModel: MainViewModel) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Icon(Icons.Default.Mic, contentDescription = null)
-                    Text("New Voice", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("新建音色", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 }
                 OutlinedTextField(
                     value = voiceName,
                     onValueChange = { voiceName = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("Name") },
+                    label = { Text("名称") },
                 )
                 if (recorderState.isRecording) {
                     LinearProgressIndicator(
                         progress = { recorderState.level.coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Text("Recording ${formatDuration(recorderState.elapsedMillis)}", style = MaterialTheme.typography.bodySmall)
+                    Text("正在录音 · ${formatDuration(recorderState.elapsedMillis)}", style = MaterialTheme.typography.bodySmall)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(
@@ -1217,19 +1199,19 @@ private fun VoicesScreen(viewModel: MainViewModel) {
                     ) {
                         Icon(if (recorderState.isRecording) Icons.Default.Stop else Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(if (recorderState.isRecording) "Stop & Create" else "Record")
+                        Text(if (recorderState.isRecording) "停止并创建" else "开始录音")
                     }
                     OutlinedButton(
                         onClick = viewModel::cancelVoiceRecording,
                         enabled = recorderState.isRecording,
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text("Cancel")
+                        Text("取消")
                     }
                 }
                 if (state.supportsCloning == false) {
                     Text(
-                        "The current model does not expose voice cloning capabilities.",
+                        "当前模型不支持声音克隆功能。",
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -1239,9 +1221,9 @@ private fun VoicesScreen(viewModel: MainViewModel) {
 
         ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Voices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("音色管理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 if (voices.isEmpty()) {
-                    Text("No saved voices yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("还没有保存的音色。", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     voices.forEach { voice ->
                         VoiceRow(
@@ -1278,7 +1260,7 @@ private fun HistoryScreen(viewModel: MainViewModel) {
     ) {
         if (generations.isEmpty()) {
             item {
-                Text("No generated audio yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("还没有生成语音。", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         items(generations, key = { it.generationId }) { generation ->
@@ -1315,15 +1297,15 @@ private fun HistoryScreen(viewModel: MainViewModel) {
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text(if (isPlayingThis) "Stop" else "Play")
+                        Text(if (isPlayingThis) "停止" else "播放")
                     }
                     Box {
                         IconButton(onClick = { menuExpanded = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More")
+                            Icon(Icons.Default.MoreVert, contentDescription = "更多操作")
                         }
                         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                             DropdownMenuItem(
-                                text = { Text("Export") },
+                                text = { Text("导出") },
                                 leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
                                 onClick = {
                                     menuExpanded = false
@@ -1332,7 +1314,7 @@ private fun HistoryScreen(viewModel: MainViewModel) {
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("Delete") },
+                                text = { Text("删除") },
                                 leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                                 onClick = {
                                     menuExpanded = false
@@ -1375,7 +1357,6 @@ private fun ComposerPanel(
     selectedVoiceName: String,
     onTextChange: (String) -> Unit,
     onVoicePickerClick: () -> Unit,
-    onLanguageChange: (Int) -> Unit,
 ) {
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1386,7 +1367,7 @@ private fun ComposerPanel(
                 minLines = 6,
                 maxLines = 10,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                label = { Text("Text") },
+                label = { Text("输入文本") },
             )
             OutlinedButton(
                 onClick = onVoicePickerClick,
@@ -1396,15 +1377,10 @@ private fun ComposerPanel(
                 Icon(Icons.Default.RecordVoiceOver, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-                    Text("Voice", style = MaterialTheme.typography.labelMedium)
+                    Text("音色", style = MaterialTheme.typography.labelMedium)
                     Text(selectedVoiceName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            LanguageDropdown(
-                selectedLanguageId = state.selectedLanguageId,
-                enabled = !state.busy,
-                onLanguageChange = onLanguageChange,
-            )
         }
     }
 }
@@ -1425,17 +1401,17 @@ private fun VoicePickerSheet(
                 .padding(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text("Choose voice", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("选择音色", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             VoicePickerItem(
-                title = "Default Voice",
-                subtitle = "Use the built-in speaker",
+                title = "默认音色",
+                subtitle = "使用模型默认音色",
                 selected = selectedVoiceId == null,
                 onClick = { onVoiceSelected(null) },
             )
             voices.forEach { voice ->
                 VoicePickerItem(
                     title = voice.name,
-                    subtitle = "${formatDuration(voice.durationMillis)} reference",
+                    subtitle = "参考音频 · ${formatDuration(voice.durationMillis)}",
                     selected = selectedVoiceId == voice.voiceId,
                     onClick = { onVoiceSelected(voice.voiceId) },
                 )
@@ -1457,7 +1433,7 @@ private fun VoicePickerItem(
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (selected) {
-            Icon(Icons.Default.RecordVoiceOver, contentDescription = "Selected", modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.RecordVoiceOver, contentDescription = "已选中", modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -1474,53 +1450,17 @@ private fun VoiceRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        FilterChip(selected = selected, onClick = onSelect, label = { Text(if (selected) "Active" else "Use") })
+        FilterChip(selected = selected, onClick = onSelect, label = { Text(if (selected) "使用中" else "使用") })
         Column(Modifier.weight(1f)) {
             Text(voice.name, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                "${formatDuration(voice.durationMillis)} reference · ${formatDate(voice.createdAt)}",
+                "参考音频 ${formatDuration(voice.durationMillis)} · ${formatDate(voice.createdAt)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         IconButton(onClick = onDelete) {
-            Icon(Icons.Default.Delete, contentDescription = "Delete")
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LanguageDropdown(
-    selectedLanguageId: Int,
-    enabled: Boolean,
-    onLanguageChange: (Int) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val selected = languageOptions.firstOrNull { it.id == selectedLanguageId } ?: languageOptions.first()
-
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { if (enabled) expanded = it }) {
-        OutlinedTextField(
-            value = selected.label,
-            onValueChange = {},
-            readOnly = true,
-            enabled = enabled,
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth(),
-            label = { Text("Language") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            languageOptions.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.label) },
-                    onClick = {
-                        expanded = false
-                        onLanguageChange(option.id)
-                    },
-                )
-            }
+            Icon(Icons.Default.Delete, contentDescription = "删除")
         }
     }
 }
@@ -1540,12 +1480,12 @@ private fun ModelPanel(
                 Column(Modifier.weight(1f)) {
                     Text(selectedVariant.displayName, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "${formatBytes(selectedVariant.totalBytes)} model package",
+                        "模型文件总大小：${formatBytes(selectedVariant.totalBytes)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                AssistChip(onClick = {}, label = { Text(if (state.modelReady) "Ready" else "Missing") })
+                AssistChip(onClick = {}, label = { Text(if (state.modelReady) "已就绪" else "未下载") })
             }
 
             if (state.downloading) {
@@ -1561,14 +1501,14 @@ private fun ModelPanel(
                 ) {
                     Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(if (state.modelReady) "Model ready" else "Download model")
+                    Text(if (state.modelReady) "模型已就绪" else "下载模型")
                 }
                 OutlinedButton(
                     onClick = onLoad,
                     enabled = state.modelReady && !state.loaded && !state.busy,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(if (state.loaded) "Loaded" else "Load")
+                    Text(if (state.loaded) "已加载" else "加载模型")
                 }
             }
         }
@@ -1584,10 +1524,10 @@ private fun RuntimePanel(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(Icons.Default.Tune, contentDescription = null)
-                Text("Performance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("性能设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
             Text(
-                "CPU backend",
+                "CPU 运算后端",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1597,7 +1537,7 @@ private fun RuntimePanel(
                         selected = state.selectedCpuThreads == threads,
                         onClick = { onCpuThreadsChange(threads) },
                         enabled = !state.busy,
-                        label = { Text("$threads threads") },
+                        label = { Text("$threads 个线程") },
                     )
                 }
             }
@@ -1615,7 +1555,7 @@ private fun ResultPanel(state: QwenTtsUiState, onPlay: () -> Unit, onStop: () ->
             } else {
                 if (state.sampleCount > 0 && state.sampleRate > 0) {
                     Text(
-                        "Audio ${formatSeconds(state.sampleCount.toDouble() / state.sampleRate.toDouble())} · generated in ${formatDuration(state.synthesisMillis)}",
+                        "音频时长 ${formatSeconds(state.sampleCount.toDouble() / state.sampleRate.toDouble())} · 合成耗时 ${formatDuration(state.synthesisMillis)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1633,7 +1573,7 @@ private fun ResultPanel(state: QwenTtsUiState, onPlay: () -> Unit, onStop: () ->
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(if (state.playing) "Stop" else "Play")
+                    Text(if (state.playing) "停止" else "播放")
                 }
             }
         }
@@ -1649,20 +1589,20 @@ private fun GenerationStats(state: QwenTtsUiState) {
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            "Elapsed ${formatDuration(state.operationElapsedMillis)}",
+            "已用时间：${formatDuration(state.operationElapsedMillis)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (state.synthesisFrames > 0) {
             Text(
-                "Audio so far ~${formatSeconds(generatedAudioSeconds)}",
+                "已生成音频约 ${formatSeconds(generatedAudioSeconds)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if (remainingMillis != null && state.estimateSampleCount >= 3) {
             Text(
-                "Estimated remaining ${formatDuration(remainingMillis)}",
+                "预计剩余 ${formatDuration(remainingMillis)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1674,7 +1614,7 @@ private data class WavData(val samples: FloatArray, val sampleRate: Int)
 
 private fun readWav(path: String): WavData {
     val bytes = File(path).readBytes()
-    require(bytes.size > 44) { "WAV file is empty" }
+    require(bytes.size > 44) { "WAV 文件为空" }
     fun intLe(offset: Int): Int =
         (bytes[offset].toInt() and 0xff) or
             ((bytes[offset + 1].toInt() and 0xff) shl 8) or
@@ -1707,7 +1647,7 @@ private fun readWav(path: String): WavData {
         }
         cursor = payload + size
     }
-    require(dataOffset >= 0 && bits == 16) { "Only PCM16 WAV history items are supported" }
+    require(dataOffset >= 0 && bits == 16) { "仅支持播放 PCM16 格式的 WAV 历史音频" }
     val frameBytes = channels * 2
     val frameCount = dataSize / frameBytes
     val samples = FloatArray(frameCount)
@@ -1725,7 +1665,7 @@ private fun readWav(path: String): WavData {
 }
 
 private fun formatBytes(bytes: Long): String {
-    if (bytes < 1024L) return "$bytes B"
+    if (bytes < 1024L) return "$bytes 字节"
     val units = arrayOf("KB", "MB", "GB", "TB")
     var value = bytes.toDouble() / 1024.0
     var unitIndex = 0
@@ -1740,14 +1680,14 @@ private fun formatDuration(milliseconds: Long): String {
     val totalSeconds = (milliseconds / 1000L).coerceAtLeast(0L)
     val minutes = totalSeconds / 60L
     val seconds = totalSeconds % 60L
-    return if (minutes > 0L) "%d:%02d".format(Locale.US, minutes, seconds) else "%ds".format(Locale.US, seconds)
+    return if (minutes > 0L) "%d:%02d".format(Locale.US, minutes, seconds) else "%d秒".format(Locale.US, seconds)
 }
 
 private fun formatSeconds(seconds: Double): String =
     "%.1fs".format(Locale.US, seconds.coerceAtLeast(0.0))
 
 private fun formatDate(epochMillis: Long): String {
-    val date = java.text.SimpleDateFormat("dd.MM. HH:mm", Locale.getDefault())
+    val date = java.text.SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.getDefault())
     return date.format(java.util.Date(epochMillis))
 }
 
